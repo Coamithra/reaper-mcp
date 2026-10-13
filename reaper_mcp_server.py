@@ -3556,6 +3556,34 @@ async def run_action_by_name(action_name: str) -> dict:
     return await reaper_call("Main_OnCommand", cmd_id, 0)
 
 
+# run_lua runs arbitrary code inside REAPER, so it is opt-in: it exists only for a server
+# started with REAPER_MCP_ALLOW_LUA=1, and a client that never asked for it never sees it.
+LUA_TOOL_ENABLED = os.environ.get("REAPER_MCP_ALLOW_LUA") == "1"
+
+
+async def run_lua(code: str, label: str = "") -> dict:
+    """
+    Run Lua inside REAPER with the full ReaScript API (reaper.*), for anything no tool
+    covers. Look objects up in the code, e.g. reaper.GetActiveTake(reaper.GetMediaItem(0, 0)).
+    What it returns comes back as `result` (several values as a list), print() lines as
+    `output`. One undo step, labelled "MCP: <label>".
+
+    Returns:
+        On a compile or runtime error, ok is false and `error` says which.
+    """
+    # The undo wrapper has already set "MCP: run lua"; a label names the step instead.
+    token = undo_label.set(undo_step_label(label)) if label.strip() else None
+    try:
+        return await reaper_call("RunLua", code)
+    finally:
+        if token is not None:
+            undo_label.reset(token)
+
+
+if LUA_TOOL_ENABLED:
+    mcp.tool(annotations=ToolAnnotations(destructiveHint=True))(run_lua)
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 async def get_fx_presets(track_index: int, fx_index: int) -> dict:
     """

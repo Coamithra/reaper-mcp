@@ -1255,11 +1255,56 @@ local function ReloadBridge()
     return {ok = true, reloading = true, from_version = BRIDGE_VERSION, path = BRIDGE_PATH}
 end
 
+-- Arbitrary ReaScript, for whatever no tool wraps. Most of the API takes object pointers
+-- (a take, an envelope), which cannot cross the JSON mailbox; a snippet looks its own
+-- objects up, so only its results cross back. It runs in an environment of its own that
+-- reads through to the globals, so a snippet's globals stay its own and can never
+-- overwrite the bridge's. print() is captured into `output` rather than sent to the
+-- console, which would raise the console window and steal focus on every call.
+local function RunLua(code)
+    if type(code) ~= "string" or code == "" then
+        return {ok = false, error = "RunLua requires a non-empty code string"}
+    end
+    local output = as_array({})
+    local env = setmetatable({
+        print = function(...)
+            local parts = {}
+            for i = 1, select("#", ...) do
+                parts[#parts + 1] = tostring((select(i, ...)))
+            end
+            output[#output + 1] = table.concat(parts, "\t")
+        end,
+    }, {__index = _G})
+    local chunk, compile_error = load(code, "=run_lua", "t", env)
+    if not chunk then
+        return {ok = false, error = "compile error: " .. tostring(compile_error), output = output}
+    end
+    local results = table.pack(pcall(chunk))
+    if not results[1] then
+        return {ok = false, error = "runtime error: " .. tostring(results[2]), output = output}
+    end
+    -- One returned value comes back as itself, several as a list, none as an absent field.
+    local result
+    if results.n == 2 then
+        result = results[2]
+    elseif results.n > 2 then
+        result = as_array({})
+        for i = 2, results.n do
+            -- a nil would end the list early when it is encoded, so it travels as false
+            local value = results[i]
+            if value == nil then value = false end
+            result[i - 1] = value
+        end
+    end
+    return {ok = true, result = result, output = output}
+end
+
 -- Export function table for DSL
 DSL_FUNCTIONS = {
     -- Bridge metadata
     GetBridgeVersion = GetBridgeVersion,
     ReloadBridge = ReloadBridge,
+    RunLua = RunLua,
 
     -- Track info
     GetTrackInfo = GetTrackInfo,

@@ -5,6 +5,20 @@ All notable changes to TwelveTake REAPER MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Coamithra fork
+
+**Redeploy the bridge after pulling this: run `twelvetake-reaper-mcp --install-bridge`.**
+
+### Added
+- **`run_lua`** runs a Lua snippet inside REAPER with the whole ReaScript API in reach, for
+  anything no tool wraps: a take's playback rate or pitch mode, take envelope points, item
+  properties. Most of the API wants object pointers, which cannot cross the JSON mailbox, so the
+  snippet looks up its own objects and only its results come back. It runs in an environment of
+  its own, so its globals can never overwrite the bridge's; `print()` is captured into `output`;
+  the whole snippet is one undo step, named by an optional `label`.
+- **It is opt-in, because it runs arbitrary code.** The tool exists only for a server started with
+  `REAPER_MCP_ALLOW_LUA=1` in its environment; without it the tool list is unchanged.
+
 ## [1.8.0] - 2026-09-29
 
 **After you update, run `twelvetake-reaper-mcp --install-bridge`.** It installs the new bridge and
